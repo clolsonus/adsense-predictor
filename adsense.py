@@ -2,12 +2,16 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
+import os
+import pathlib
 import datetime
 from dateutil import parser
 import time
 
 debug = 1
-logfile = '/home/curt/bin/adsense.txt'
+
+home = str(pathlib.Path.home())
+logfile = os.path.join(home, "adsense.txt")
 
 # google accumulates days relative to the pacific time zone, so define your
 # offset here. (i.e. central time zone = 2 * (1/24)
@@ -50,90 +54,92 @@ def gen_func( coeffs, min, max, steps ):
 today_dow = day_of_week(date_index())
 print("Today's day of week:", today_dow)
 
-print("Reading log file:", logfile)
-f = open(logfile, 'r')
-# pass one: daily totals
-first_day = None
-day_totals = {}
-for line in f:
-    (index_today, index_yesterday, dayperc, today, yesterday,
-       last7, thismo, last28) = line.split(',')
-    if not first_day:
-        first_day = index_today
-    day_totals[index_yesterday] = float(yesterday)
-    #print( day_of_week(index_today) )
+fit = None
+if os.path.exists(logfile):
+    print("Reading log file:", logfile)
+    f = open(logfile, 'r')
+    # pass one: daily totals
+    first_day = None
+    day_totals = {}
+    for line in f:
+        (index_today, index_yesterday, dayperc, today, yesterday,
+           last7, thismo, last28) = line.split(',')
+        if not first_day:
+            first_day = index_today
+        day_totals[index_yesterday] = float(yesterday)
+        #print( day_of_week(index_today) )
 
-firstday_str = first_day[:4] + "-" + first_day[4:6] + "-" + first_day[6:8]
-start_day = parser.parse(firstday_str)
-    
-# pass two: progress
-data = []
-averages = {}
-f.seek(0)
-for line in f:
-    (index_today, index_yesterday, dayperc, today, yesterday,
-       last7, thismo, last28) = line.rstrip().split(',')
-    #line = "%s,%s,%.4f,%s,%s,%s,%s,%s" \
-    #    % (index_today, index_yesterday, float(dayperc)-tzoffset, today, yesterday,
-    #       last7, thismo, last28)
-    #print(line.rstrip())
-    if index_today in day_totals:
-        if day_totals[index_today] > 0:
-            if day_of_week(index_today) == today_dow:
-                amt_perc = float(today) / day_totals[index_today]
-                data.append( [float(dayperc), amt_perc] )
-    today_str = index_today[:4] + "-" + index_today[4:6] + "-" + index_today[6:8]
-    today_day = parser.parse(today_str)
-    diff = (today_day - start_day).days
-    averages[diff] = [ diff, float(last7)/7, float(last28)/28 ]
-    
-f.close()
-if debug >= 2:
-    print(day_totals)
-    print(data)
+    firstday_str = first_day[:4] + "-" + first_day[4:6] + "-" + first_day[6:8]
+    start_day = parser.parse(firstday_str)
 
-# complete end points
-data.insert(0, [0,0])
-data.append([1+tzoffset,1])
+    # pass two: progress
+    data = []
+    averages = {}
+    f.seek(0)
+    for line in f:
+        (index_today, index_yesterday, dayperc, today, yesterday,
+           last7, thismo, last28) = line.rstrip().split(',')
+        #line = "%s,%s,%.4f,%s,%s,%s,%s,%s" \
+        #    % (index_today, index_yesterday, float(dayperc)-tzoffset, today, yesterday,
+        #       last7, thismo, last28)
+        #print(line.rstrip())
+        if index_today in day_totals:
+            if day_totals[index_today] > 0:
+                if day_of_week(index_today) == today_dow:
+                    amt_perc = float(today) / day_totals[index_today]
+                    data.append( [float(dayperc), amt_perc] )
+        today_str = index_today[:4] + "-" + index_today[4:6] + "-" + index_today[6:8]
+        today_day = parser.parse(today_str)
+        diff = (today_day - start_day).days
+        averages[diff] = [ diff, float(last7)/7, float(last28)/28 ]
 
-if False:
-    # encourage the plot to go through [0,0] and [1,1]
-    weights = np.ones(len(data))
-    weights[0] = len(data)
-    weights[-1] = len(data)
-else:
-    # weight more recent data more
-    weights = np.ones(len(data))
-    for i in range(len(data)):
-        weights[i] = i
-    weights[0] = len(data)*len(data)
-    weights[-1] = len(data)*len(data)
+    f.close()
+    if debug >= 2:
+        print(day_totals)
+        print(data)
 
-# fit and plot the progress data
-data = np.array(data)
-fit, res, _, _, _ = np.polyfit( data[:,0], data[:,1], 4, w=weights, full=True )
-xvals, yvals = gen_func(fit, 0.0, 1.0, 100)
-plt.figure()
-plt.title("Progress")
-plt.xlabel("Percent of Day")
-plt.ylabel("Percent of Revenue")
-plt.plot(data[:,0], data[:,1],'b.',label='Raw data')
-plt.plot(xvals, yvals,'r',label='Fit')
+    # complete end points
+    data.insert(0, [0,0])
+    data.append([1+tzoffset,1])
 
-# plot the rolling averages (convert dict to array)
-avg = []
-for key in sorted(averages):
-    avg.append(averages[key])
-avg = np.array(avg)
-plt.figure()
-plt.title("Rolling Averages")
-plt.xlabel("Days")
-plt.ylabel("Daily Revenue")
-plt.grid('on')
-plt.plot(avg[:,0], avg[:,1], label="7 Day")
-plt.plot(avg[:,0], avg[:,2], label="28 Day")
-plt.legend()
-plt.show()
+    if False:
+        # encourage the plot to go through [0,0] and [1,1]
+        weights = np.ones(len(data))
+        weights[0] = len(data)
+        weights[-1] = len(data)
+    else:
+        # weight more recent data more
+        weights = np.ones(len(data))
+        for i in range(len(data)):
+            weights[i] = i
+        weights[0] = len(data)*len(data)
+        weights[-1] = len(data)*len(data)
+
+    # fit and plot the progress data
+    data = np.array(data)
+    fit, res, _, _, _ = np.polyfit( data[:,0], data[:,1], 4, w=weights, full=True )
+    xvals, yvals = gen_func(fit, 0.0, 1.0, 100)
+    plt.figure()
+    plt.title("Progress")
+    plt.xlabel("Percent of Day")
+    plt.ylabel("Percent of Revenue")
+    plt.plot(data[:,0], data[:,1],'b.',label='Raw data')
+    plt.plot(xvals, yvals,'r',label='Fit')
+
+    # plot the rolling averages (convert dict to array)
+    avg = []
+    for key in sorted(averages):
+        avg.append(averages[key])
+    avg = np.array(avg)
+    plt.figure()
+    plt.title("Rolling Averages")
+    plt.xlabel("Days")
+    plt.ylabel("Daily Revenue")
+    plt.grid('on')
+    plt.plot(avg[:,0], avg[:,1], label="7 Day")
+    plt.plot(avg[:,0], avg[:,2], label="28 Day")
+    plt.legend()
+    plt.show()
 
 result = time.localtime()
 
@@ -166,16 +172,17 @@ monthperc = (result.tm_mday - 1 + dayperc) / MDAYS[result.tm_mon]
 ave7 = last7 / 7.0
 ave28 = last28 / 28.0
 avemo = thismo / (result.tm_mday -1 + dayperc)
-print("  average 7 =", ave7, "28 =", ave28, "mo =", avemo)
+print("  average 7 = $%.2f  28 = $%.2f  mo = $%.2f" % (ave7, ave28, avemo))
 
 aveday = (2 * ave7 + 4 * avemo + 8 * ave28) / 14
-print("  weighted average day =", aveday)
+print("  weighted average day = %.3f" % aveday)
 
-func = np.poly1d(fit)
+if not fit is None:
+    func = np.poly1d(fit)
 
-fit_perc = func(dayperc)
-print('fit perc:', fit_perc)
-fit_est = today / fit_perc
+    fit_perc = func(dayperc)
+    print("fit perc: %.3f" % fit_perc)
+    fit_est = today / fit_perc
 
 if debug >= 2:
     print("  month = ", result.tm_mon, ", days this month = ", MDAYS[result.tm_mon])
@@ -187,7 +194,8 @@ if debug >= 1:
       print("  day %% = %.4f" % dayperc)
       print( "  month %% = %.4f" % monthperc)
 #print("Today's total (est by time) = $%.2f" % dayest)
-print("Today's total (est by fit) = $%.2f" % fit_est)
+if not fit is None:
+    print("Today's total (est by fit) = $%.2f" % fit_est)
 print("This month's total (est) = $%.2f" % monthest)
 google_sluff_factor = 0.89
 print("Estimated google revenue = $%.0f" % (int((monthest*google_sluff_factor)/10)*10))
