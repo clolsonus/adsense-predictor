@@ -98,6 +98,9 @@ if os.path.exists(logfile):
         print(day_totals)
         print(data)
 
+    # try keeping only most recent 'n' data points
+    data = data[-365:]
+    
     # complete end points
     data.insert(0, [0,0])
     data.append([1+tzoffset,1])
@@ -174,7 +177,7 @@ ave28 = last28 / 28.0
 avemo = thismo / (result.tm_mday -1 + dayperc)
 print("  average 7 = $%.2f  28 = $%.2f  mo = $%.2f" % (ave7, ave28, avemo))
 
-aveday = (2 * ave7 + 4 * avemo + 8 * ave28) / 14
+aveday = (2 * ave7 + 1 * avemo + 7 * ave28) / 10
 print("  weighted average day = %.3f" % aveday)
 
 if not fit is None:
@@ -197,7 +200,7 @@ if debug >= 1:
 if not fit is None:
     print("Today's total (est by fit) = $%.2f" % fit_est)
 print("This month's total (est) = $%.2f" % monthest)
-google_sluff_factor = 0.89
+google_sluff_factor = 0.98  # last time 0.97 was too low
 print("Estimated google revenue = $%.0f" % (int((monthest*google_sluff_factor)/10)*10))
 
 
